@@ -17,7 +17,8 @@ Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
 
 optlist, args = getopt.getopt(sys.argv[1:], 'r:h')
 
-rules_file = "~/.bank-csv-to-ledger/rules.txt"
+rules_file = os.path.expanduser("~/.bank-csv-to-ledger/rules.txt")
+
 for o, a in optlist:
     if o == "-r":
         rules_file = a
