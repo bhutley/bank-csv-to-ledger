@@ -1,0 +1,18 @@
+Rule:
+  Name: Blah
+  Conditions:
+    AMOUNT > 0.0
+    DESC CONTAINS "some stuff"
+  Allocations:
+    "Bank Accounts:Current Account" 100% "VAT:VAT Collected:Sales" 20%
+
+Rule:
+  Name: Blah 2
+  Conditions:
+    AMOUNT < 0.0
+    DESC CONTAINS "some other stuff"
+  Allocations:
+    "Bank Accounts:Current Account" 80%
+    "Bank Accounts:Interest Account" 20%
+
+     
