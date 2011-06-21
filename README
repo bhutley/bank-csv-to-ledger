@@ -1,2 +1,38 @@
 This project converts a CSV file of the list of bank transactions to
 jwiegley's Ledger format.
+
+The input is a CSV file, such as that downloaded from your bank.
+The format of the CSV file is DATE,DESCRIPTION,AMOUNT
+for example:
+
+16/04/2011,XERO LIVE LTD          LONDON SE1    GB ,-28.80
+
+The program reads a rule file, that determines how to treat each
+entry.  The rules file (by default ~/bank-csv-to-ledger/rules.txt)
+contains entries such as the following:
+
+Rule:
+  Name: Xero
+  Conditions:
+    DESC STARTS_WITH "XERO LIVE"
+  Allocations:
+    "Expenses:VAT Purchases:Accountancy" 100% "VAT:VAT Paid (Purchases)" 20%
+
+
+This rule matches the above CSV row, and will output the following
+Ledger formatted entry:
+
+2011-04-16	XERO LIVE LTD          LONDON SE1    GB 
+	Bank Accounts:Credit Card	-28.80
+	Expenses:VAT Purchases:Accountancy	23.04
+	VAT:VAT Paid (Purchases)	5.76
+
+The program is run by specifying the CSV file, and the name of the account the CSV file corresponds to on the command line. For example:
+
+./bank-csv-to-ledger.py statement_credit_card.csv "Bank Accounts:Credit Card"
+
+The program outputs to stdout, so you will probably want to append to
+your ledger file:
+
+./bank-csv-to-ledger.py statement_credit_card.csv "Bank Accounts:Credit Card" >> ledger.txt
+
