@@ -128,6 +128,7 @@ class ImportRule:
         self.matches_all_or_any = ImportRule.ALL
         self.conditions = []
         self.allocations = []
+        self.ignore = False
 
     def matches(self, account, date, desc, amount):
         if self.matches_all_or_any == ImportRule.ALL:
@@ -147,7 +148,7 @@ class ImportRule:
         for allocation in self.allocations:
             s += allocation.getLedgerString(amount)
         return s
-            
+
 def parse_rule_file(filename):
     IN_IDLE = 0
     IN_RULE = 1
@@ -162,99 +163,105 @@ def parse_rule_file(filename):
     file = open(filename, 'r')
     for line in file:
         line = line.strip()
-        if line.startswith('Rule:'):
-            # we are in a new rule.
-            # if we have finished with the previous rule, add it to our list.
-            if cur_rule is not None:
-                if cur_rule.name is None:
-                    raise Exception("The current rule does not have a name!")
+        # Don't process the line if it starts with a comment char
+        if not line.startswith(';') and not line.startswith('#'):
+            if line.startswith('Rule:'):
+                # we are in a new rule.
+                # if we have finished with the previous rule, add it to our list.
+                if cur_rule is not None:
+                    if cur_rule.name is None:
+                        raise Exception("The current rule does not have a name!")
 
-                if rules_by_name.has_key(cur_rule.name):
-                    raise Exception("A rule named '%s' already exists in our rule list" % (cur_rule.name, ))
-                rules.append(cur_rule)
-                rules_by_name[cur_rule.name] = cur_rule
-            cur_rule = ImportRule()
-            state = IN_RULE
+                    if rules_by_name.has_key(cur_rule.name):
+                        raise Exception("A rule named '%s' already exists in our rule list" % (cur_rule.name, ))
+                    rules.append(cur_rule)
+                    rules_by_name[cur_rule.name] = cur_rule
+                cur_rule = ImportRule()
+                state = IN_RULE
 
-        if state == IN_RULE or state == IN_CONDITIONS or state == IN_ALLOCATION:
-            if line.startswith('Name:'):
-                cur_rule.name = line[5:].strip()
-            elif line.startswith('Conditions:'):
-                state = IN_CONDITIONS
-            elif line.startswith('Allocations:'):
-                state = IN_ALLOCATION
-            elif state == IN_CONDITIONS:
-                fields = shlex.split(line)
-                if len(fields) == 3:
-                    what_str = fields[0]
-                    pred_str = fields[1]
-                    value_str = fields[2]
-                    what = None
-                    pred = None
-                    if what_str == 'AMOUNT':
-                        what = RuleCondition.AMOUNT
-                    elif what_str == 'DESC':
-                        what = RuleCondition.DESC
-                    elif what_str == 'AMOUNT':
-                        what = RuleCondition.AMOUNT
-                    elif what_str == 'DATE':
-                        what = RuleCondition.DATE
-                    else:
-                        raise Exception("Unknown 'what' field '%s' in Condition list." % (what_str, ))
-
-                    if pred_str == 'EQUALS' or pred_str == '==' or pred_str == 'EQ':
-                        pred = RuleCondition.EQUALS
-                    elif pred_str == 'CONTAINS':
-                        pred = RuleCondition.CONTAINS
-                    elif pred_str == 'STARTS_WITH':
-                        pred = RuleCondition.STARTS_WITH
-                    elif pred_str == 'ENDS_WITH':
-                        pred = RuleCondition.ENDS_WITH
-                    elif pred_str == 'GT' or pred_str == '>':
-                        pred = RuleCondition.GT
-                    elif pred_str == 'GE' or pred_str == '>=':
-                        pred = RuleCondition.GE
-                    elif pred_str == 'LT' or pred_str == '<':
-                        pred = RuleCondition.LT
-                    elif pred_str == 'LE' or pred_str == '<=':
-                        pred = RuleCondition.LE
-                    else:
-                        raise Exception("Unknown Condition predicate '%s'" % (pred_str, ))
-
-                    rule_condition = RuleCondition(what, pred, value_str)
-                    cur_rule.conditions.append(rule_condition)
-
-            elif state == IN_ALLOCATION:
-                fields = shlex.split(line)
-                if len(fields) == 2 or len(fields) == 4:
-                    account_str = fields[0]
-                    amount_str = fields[1]
-                    tax_account_str = None
-                    tax_str = None
-                    if len(fields) == 4:
-                        tax_account_str = fields[2]
-                        tax_str = fields[3]
-
-                    is_percent = False
-
-                    tax_is_percent = False
-                    tax = 0.0
-                    if tax_str is not None:
-                        if tax_str.endswith('%'):
-                            tax = float(tax_str[:-1]) / 100.0
-                            tax_is_percent = True
+            if state == IN_RULE or state == IN_CONDITIONS or state == IN_ALLOCATION:
+                if line.startswith('Name:'):
+                    cur_rule.name = line[5:].strip()
+                if line.startswith('Ignore:'):
+                    cur_rule.ignore = True
+                elif line.startswith('Conditions:'):
+                    state = IN_CONDITIONS
+                elif line.startswith('Allocations:'):
+                    state = IN_ALLOCATION
+                elif state == IN_CONDITIONS:
+                    fields = shlex.split(line)
+                    if len(fields) == 3:
+                        what_str = fields[0]
+                        pred_str = fields[1]
+                        value_str = fields[2]
+                        what = None
+                        pred = None
+                        if what_str == 'PAYEE':
+                            what = RuleCondition.PAYEE
+                        elif what_str == 'AMOUNT':
+                            what = RuleCondition.AMOUNT
+                        elif what_str == 'DESC':
+                            what = RuleCondition.DESC
+                        elif what_str == 'AMOUNT':
+                            what = RuleCondition.AMOUNT
+                        elif what_str == 'DATE':
+                            what = RuleCondition.DATE
                         else:
-                            tax = float(tax_str)
+                            raise Exception("Unknown 'what' field '%s' in Condition list." % (what_str, ))
 
-                    amount = 0.0
-                    if amount_str.endswith('%'):
-                        amount = float(amount_str[:-1]) / 100.0
-                        is_percent = True
-                    else:
-                        amount = float(amount_str)
+                        if pred_str == 'EQUALS' or pred_str == '==' or pred_str == 'EQ':
+                            pred = RuleCondition.EQUALS
+                        elif pred_str == 'CONTAINS':
+                            pred = RuleCondition.CONTAINS
+                        elif pred_str == 'STARTS_WITH':
+                            pred = RuleCondition.STARTS_WITH
+                        elif pred_str == 'ENDS_WITH':
+                            pred = RuleCondition.ENDS_WITH
+                        elif pred_str == 'GT' or pred_str == '>':
+                            pred = RuleCondition.GT
+                        elif pred_str == 'GE' or pred_str == '>=':
+                            pred = RuleCondition.GE
+                        elif pred_str == 'LT' or pred_str == '<':
+                            pred = RuleCondition.LT
+                        elif pred_str == 'LE' or pred_str == '<=':
+                            pred = RuleCondition.LE
+                        else:
+                            raise Exception("Unknown Condition predicate '%s'" % (pred_str, ))
 
-                    allocation = Allocation(is_percent, account_str, amount, tax_is_percent, tax_account_str, tax)
-                    cur_rule.allocations.append(allocation)
+                        rule_condition = RuleCondition(what, pred, value_str)
+                        cur_rule.conditions.append(rule_condition)
+
+                elif state == IN_ALLOCATION:
+                    fields = shlex.split(line)
+                    if len(fields) == 2 or len(fields) == 4:
+                        account_str = fields[0]
+                        amount_str = fields[1]
+                        tax_account_str = None
+                        tax_str = None
+                        if len(fields) == 4:
+                            tax_account_str = fields[2]
+                            tax_str = fields[3]
+
+                        is_percent = False
+
+                        tax_is_percent = False
+                        tax = 0.0
+                        if tax_str is not None:
+                            if tax_str.endswith('%'):
+                                tax = float(tax_str[:-1]) / 100.0
+                                tax_is_percent = True
+                            else:
+                                tax = float(tax_str)
+
+                        amount = 0.0
+                        if amount_str.endswith('%'):
+                            amount = float(amount_str[:-1]) / 100.0
+                            is_percent = True
+                        else:
+                            amount = float(amount_str)
+
+                        allocation = Allocation(is_percent, account_str, amount, tax_is_percent, tax_account_str, tax)
+                        cur_rule.allocations.append(allocation)
 
     file.close()
 
@@ -274,19 +281,23 @@ def usage():
 Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
 
   -r <rules.txt> - specify the file to use for determining the list of rules.
+  -u             - print unmatched transactions only.
   -h             - print out these rules.
 """
     exit(0)
 
-optlist, args = getopt.getopt(sys.argv[1:], 'r:h')
+optlist, args = getopt.getopt(sys.argv[1:], 'r:hu')
 
 rules_file = os.path.expanduser("~/.bank-csv-to-ledger/rules.txt")
+print_unmatched_only = False
 
 for o, a in optlist:
     if o == "-r":
         rules_file = a
     elif o == "-h":
         usage()
+    elif o == "-u":
+        print_unmatched_only = True
 
 if len(args) != 2:
     usage();
@@ -313,9 +324,12 @@ class Tran:
 
 
     def __str__(self):
+        s = ("%s,%s,%.2f" % (self.date, self.desc, self.amount))
+        return s
+
+    def getLedgerString(self):
         s = ("%s\t%s\n" % (self.date, self.desc))
         s += ("\t%s\t%0.2f\n" % (self.account, self.amount))
-
         return s
 
 
@@ -351,10 +365,14 @@ for dt in dates:
         rule_triggered = False
         for rule in rules:
             if rule.matches(tran.account, tran.date, tran.desc, tran.amount):
-                print rule.getLedgerString(tran.account, tran.date, tran.desc, tran.amount)
+                if print_unmatched_only == False and not rule.ignore:
+                    print rule.getLedgerString(tran.account, tran.date, tran.desc, tran.amount)
                 rule_triggered = True
                 break
 
         if rule_triggered == False:
-            print tran
+            if print_unmatched_only:
+                print tran
+            else:
+                print tran.getLedgerString()
 
