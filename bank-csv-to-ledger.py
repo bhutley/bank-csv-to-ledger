@@ -99,12 +99,12 @@ class Allocation:
             amount_to_use = amount * self.amount
             if self.tax_account is not None:
                 if self.tax_is_percent:
-                    tax = amount_to_use * self.tax_rate
+                    tax = amount_to_use / (1.0 + self.tax_rate)
                 else:
                     tax = self.tax_rate
-            remainder = amount_to_use - tax
+            remainder = amount - tax
         else:
-            amount_to_use = self.amount
+            amount_to_use = -self.amount
 
             if self.tax_account is not None:
                 if self.tax_is_percent:
