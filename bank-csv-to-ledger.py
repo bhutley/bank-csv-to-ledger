@@ -283,6 +283,7 @@ Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
   -r <rules.txt>  - specify the file to use for determining the list of rules.
   -D <dateFormat> - specify the date format [Y-M-D/D M Y/etc] (default D/M/Y)
   -u              - print unmatched transactions only.
+  -U              - print unmatched in rule format.
   -I              - ignore first line
   -h              - print out these rules.
 """
@@ -290,10 +291,11 @@ Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
 
 date_format = 'D/M/Y'
 ignore_first_line = False
-optlist, args = getopt.getopt(sys.argv[1:], 'r:D:huI')
+optlist, args = getopt.getopt(sys.argv[1:], 'r:D:huUI')
 
 rules_file = os.path.expanduser("~/.bank-csv-to-ledger/rules.txt")
 print_unmatched_only = False
+print_unmatched_as_rules = False
 
 for o, a in optlist:
     if o == "-r":
@@ -302,6 +304,8 @@ for o, a in optlist:
         usage()
     elif o == "-u":
         print_unmatched_only = True
+    elif o == "-U":
+        print_unmatched_as_rules = True
     elif o == "-D":
         date_format = a
     elif o == '-I':
@@ -410,6 +414,8 @@ for fields in reader:
 
 file.close()
 
+unmatched_rules = {}
+
 rules = parse_rule_file(rules_file)
 
 dates = transactions.keys()
@@ -420,7 +426,7 @@ for dt in dates:
         rule_triggered = False
         for rule in rules:
             if rule.matches(tran.account, tran.date, tran.desc, tran.amount):
-                if print_unmatched_only == False and not rule.ignore:
+                if print_unmatched_only == False and print_unmatched_as_rules == False and not rule.ignore:
                     print rule.getLedgerString(tran.account, tran.date, tran.desc, tran.amount)
                 rule_triggered = True
                 break
@@ -428,6 +434,20 @@ for dt in dates:
         if rule_triggered == False:
             if print_unmatched_only:
                 print tran
+            elif print_unmatched_as_rules:
+                if not unmatched_rules.has_key(tran.desc):
+                    unmatched_rules[tran.desc] = tran
             else:
                 print tran.getLedgerString()
 
+if print_unmatched_as_rules:
+    desclist = unmatched_rules.keys()
+    desclist.sort()
+    for desc in desclist:
+        print("Rule:")
+        print("  Name: %s" % (desc,) )
+        print("  Conditions:")
+        print("    DESC EQUALS \"%s\"" % (desc,) )
+        print("  Allocations:")
+        print("    \"UNKNOWN:Unknown\" 100%")
+        print
