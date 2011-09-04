@@ -280,13 +280,17 @@ def usage():
     print """
 Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
 
-  -r <rules.txt> - specify the file to use for determining the list of rules.
-  -u             - print unmatched transactions only.
-  -h             - print out these rules.
+  -r <rules.txt>  - specify the file to use for determining the list of rules.
+  -D <dateFormat> - specify the date format [Y-M-D/D M Y/etc] (default D/M/Y)
+  -u              - print unmatched transactions only.
+  -I              - ignore first line
+  -h              - print out these rules.
 """
     exit(0)
 
-optlist, args = getopt.getopt(sys.argv[1:], 'r:hu')
+date_format = 'D/M/Y'
+ignore_first_line = False
+optlist, args = getopt.getopt(sys.argv[1:], 'r:D:huI')
 
 rules_file = os.path.expanduser("~/.bank-csv-to-ledger/rules.txt")
 print_unmatched_only = False
@@ -298,6 +302,10 @@ for o, a in optlist:
         usage()
     elif o == "-u":
         print_unmatched_only = True
+    elif o == "-D":
+        date_format = a
+    elif o == '-I':
+        ignore_first_line = True
 
 if len(args) != 2:
     usage();
@@ -332,10 +340,55 @@ class Tran:
         s += ("\t%s\t%0.2f\n" % (self.account, self.amount))
         return s
 
+def monthstr_to_month(ms):
+    monthstrings = [ 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', ]
 
-def format_date(dt):
-    (dd, mm, yy) = dt.split('/')
-    return yy + '-' + mm + '-' + dd
+    ms = ms.lower()
+    for i in xrange(0, len(monthstrings)):
+        if monthstrings[i] == ms:
+            return "%02d" % (i + 1, )
+    raise Exception("Invalid month '%s'" % (ms, ))
+    
+def format_date(date_format, dt):
+    delimiter = '/'
+    if date_format.find(' '):
+        delimiter = ' '
+    elif date_format.find('-'):
+        delimiter = '-'
+    parts = date_format.split(delimiter)
+    if len(parts) != 3:
+        raise Exception("Invalid date format '%s'" % (date_format, ))
+    day_offset, month_offset, year_offset = -1, -1, -1
+    for i in xrange(0, len(parts)):
+        if parts[i].startswith('D'):
+            day_offset = i
+        elif parts[i].startswith('M'):
+            month_offset = i
+        elif parts[i].startswith('Y'):
+            year_offset = i
+        else:
+            raise Exception("Invalid date format '%s'" % (date_format, ))
+
+    if day_offset == -1 or month_offset == -1 or year_offset == -1:
+        raise Exception("Invalid date format '%s'" % (date_format, ))
+        
+    fields = dt.split(delimiter)
+    if len(fields) != 3:
+        raise Exception("Date '%s' doesn't match date format '%s'" % (dt, date_format))
+
+    dd = fields[day_offset]
+    mm = fields[month_offset]
+    yy = fields[year_offset]
+
+    if len(mm) == 3:
+        mm = monthstr_to_month(mm)
+    if len(yy) == 2:
+        if int(yy) > 70:
+            yy = '19' + yy
+        else:
+            yy = '20' + yy
+
+    return "%d-%02d-%02d" % (int(yy), int(mm), int(dd), )
 
 def native_date(dt):
     (yy, mm, dd) = dt.split('-')
@@ -346,12 +399,14 @@ file = open(filename, 'r')
 reader = csv.reader(file, dialect = 'excel')
 
 for fields in reader:
-    if len(fields) == 3:
+    if len(fields) == 3 and ignore_first_line == False:
         (date, desc, amount) = fields
-        date = format_date(date)
+        date = format_date(date_format, date)
         if not transactions.has_key(date):
             transactions[date] = list()
         transactions[date].append(Tran(account, date, desc, amount))
+    if ignore_first_line == True:
+        ignore_first_line = False
 
 file.close()
 
