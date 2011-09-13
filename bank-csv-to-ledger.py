@@ -99,7 +99,7 @@ class Allocation:
             amount_to_use = amount * self.amount
             if self.tax_account is not None:
                 if self.tax_is_percent:
-                    tax = amount_to_use / (1.0 + self.tax_rate)
+                    tax = amount_to_use - (amount_to_use / (1.0 + self.tax_rate))
                 else:
                     tax = self.tax_rate
             remainder = amount - tax
@@ -280,23 +280,48 @@ def usage():
     print """
 Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
 
-  -r <rules.txt>  - specify the file to use for determining the list of rules.
-  -D <dateFormat> - specify the date format [Y-M-D/D M Y/etc] (default D/M/Y)
-  -u              - print unmatched transactions only.
-  -U              - print unmatched in rule format.
-  -I              - ignore first line
-  -h              - print out these rules.
+  -r <rules.txt>   - specify the file to use for determining the list of rules.
+  -D <dateFormat>  - specify the date format [Y-M-D/D M Y/etc] (default D/M/Y)
+  -u               - print unmatched transactions only.
+  -U               - print unmatched in rule format.
+  -I               - ignore first line
+  -f <inputFormat> - specify the input format
+  -d <delimiter>   - delimiter (defaults to comma)
+  -h               - print out these rules.
+
+ INPUT FORMAT
+ ============
+ The input format is specified as follows:
+
+   -f 'Date,Junk,Desc,PaidIn,PaidOut,Balance'
+ or
+   -f 'Date,Desc,Amount'
+
+ Valid types are:
+    Date     - specifies the transaction date
+    Desc     - specified the description
+    PaidIn   - specifies the amount in
+    PaidOut  - specifies the amount flowing out of the account
+    Amount   - specifies a signed amount, negative means the amount is going out
+    Balance  - specifies the running balance.
+
+ Date and Desc MUST be specified.
+ Either the fields Amount are specified, or PaidIn and PaidOut is given.
+
+ The default value is 'Date,Desc,Amount'
 """
     exit(0)
 
+delimiter = ','
 date_format = 'D/M/Y'
 ignore_first_line = False
-optlist, args = getopt.getopt(sys.argv[1:], 'r:D:huUI')
+optlist, args = getopt.getopt(sys.argv[1:], 'r:D:huUId:f:')
 
 rules_file = os.path.expanduser("~/.bank-csv-to-ledger/rules.txt")
 print_unmatched_only = False
 print_unmatched_as_rules = False
 
+input_format_str = 'Date,Desc,Amount'
 for o, a in optlist:
     if o == "-r":
         rules_file = a
@@ -310,9 +335,36 @@ for o, a in optlist:
         date_format = a
     elif o == '-I':
         ignore_first_line = True
+    elif o == '-d':
+        delimiter = a
+    elif o == '-f':
+        input_format_str = a
 
 if len(args) != 2:
     usage();
+
+date_offset = None
+desc_offset = None
+amount_offset = None
+paidin_offset = None
+paidout_offset = None
+balance_offset = None
+
+input_format = input_format_str.split(delimiter)
+for i in xrange(0, len(input_format)):
+    input_format[i] = input_format[i].lower().strip()
+    if input_format[i] == 'date':
+        date_offset = i
+    elif input_format[i] == 'desc':
+        desc_offset = i
+    elif input_format[i] == 'amount':
+        amount_offset = i
+    elif input_format[i] == 'paidin':
+        paidin_offset = i
+    elif input_format[i] == 'paidout':
+        paidout_offset = i
+    elif input_format[i] == 'balance':
+        balance_offset = i
 
 filename = args[0]
 account = args[1]
@@ -403,8 +455,19 @@ file = open(filename, 'r')
 reader = csv.reader(file, dialect = 'excel')
 
 for fields in reader:
-    if len(fields) == 3 and ignore_first_line == False:
-        (date, desc, amount) = fields
+    if len(fields) == len(input_format) and ignore_first_line == False:
+        date = fields[date_offset]
+        desc = fields[desc_offset]
+        amount = 0.0
+        if amount_offset is None:
+            paid_in = fields[paidin_offset].strip()
+            paid_out = fields[paidout_offset].strip()
+            if len(paid_in) > 0:
+                amount = float(paid_in)
+            if len(paid_out) > 0:
+                amount = -float(paid_out)
+        else:
+            amount = float(fields[amount_offset])
         date = format_date(date_format, date)
         if not transactions.has_key(date):
             transactions[date] = list()
