@@ -407,13 +407,13 @@ def monthstr_to_month(ms):
     
 def format_date(date_format, dt):
     delimiter = '/'
-    if date_format.find(' '):
+    if date_format.find(' ') > 0:
         delimiter = ' '
-    elif date_format.find('-'):
+    elif date_format.find('-') > 0:
         delimiter = '-'
     parts = date_format.split(delimiter)
     if len(parts) != 3:
-        raise Exception("Invalid date format '%s'" % (date_format, ))
+        raise Exception("Invalid date format '%s' parsing date '%s' (delimiter '%s')" % (date_format, dt, delimiter, ))
     day_offset, month_offset, year_offset = -1, -1, -1
     for i in xrange(0, len(parts)):
         if parts[i].startswith('D'):
