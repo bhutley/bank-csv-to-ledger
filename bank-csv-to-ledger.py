@@ -6,6 +6,7 @@ import csv
 import getopt
 import shlex
 
+
 class RuleCondition:
     # what
     PAYEE = 1
@@ -36,7 +37,7 @@ class RuleCondition:
     def matches(self, account, date, desc, amount):
         test_type = RuleCondition.STRING_TEST
         test_str = ''
-        
+
         if self.what == RuleCondition.PAYEE:
             test_str = account
         elif self.what == RuleCondition.DESC:
@@ -47,7 +48,7 @@ class RuleCondition:
             test_type = RuleCondition.NUMBER_TEST
 
         if test_type == RuleCondition.NUMBER_TEST and self.pred < RuleCondition.EQUALS:
-            raise Exception("Can't have a predicate of %s when testing the amount" % (str(self.pred), ))
+            raise Exception("Can't have a predicate of %s when testing the amount" % (str(self.pred),))
 
         if self.pred == RuleCondition.EQUALS:
             if test_type == RuleCondition.NUMBER_TEST:
@@ -94,7 +95,6 @@ class Allocation:
 
     def getLedgerString(self, amount):
         tax = 0.0
-        remainder = 0.0
         if self.is_percent:
             amount_to_use = amount * self.amount
             if self.tax_account is not None:
@@ -102,7 +102,8 @@ class Allocation:
                     tax = amount_to_use - (amount_to_use / (1.0 + self.tax_rate))
                 else:
                     tax = self.tax_rate
-            remainder = amount - tax
+            tax = round(tax, 2)
+            remainder = round(amount, 2) - tax
         else:
             amount_to_use = -self.amount
 
@@ -112,12 +113,14 @@ class Allocation:
                 else:
                     tax = self.tax_rate
 
-            remainder = amount_to_use
+            tax = round(tax, 2)
+            remainder = round(amount_to_use, 2) - tax
 
         s = ("\t%s\t%.2f\n" % (self.account, -remainder))
         if tax != 0.0 and self.tax_account is not None and len(self.tax_account) > 0:
             s += ("\t%s\t%.2f\n" % (self.tax_account, -tax))
         return s
+
 
 class ImportRule:
     ALL = 1
@@ -149,6 +152,7 @@ class ImportRule:
             s += allocation.getLedgerString(amount)
         return s
 
+
 def parse_rule_file(filename):
     IN_IDLE = 0
     IN_RULE = 1
@@ -173,7 +177,7 @@ def parse_rule_file(filename):
                         raise Exception("The current rule does not have a name!")
 
                     if rules_by_name.has_key(cur_rule.name):
-                        raise Exception("A rule named '%s' already exists in our rule list" % (cur_rule.name, ))
+                        raise Exception("A rule named '%s' already exists in our rule list" % (cur_rule.name,))
                     rules.append(cur_rule)
                     rules_by_name[cur_rule.name] = cur_rule
                 cur_rule = ImportRule()
@@ -207,7 +211,7 @@ def parse_rule_file(filename):
                         elif what_str == 'DATE':
                             what = RuleCondition.DATE
                         else:
-                            raise Exception("Unknown 'what' field '%s' in Condition list." % (what_str, ))
+                            raise Exception("Unknown 'what' field '%s' in Condition list." % (what_str,))
 
                         if pred_str == 'EQUALS' or pred_str == '==' or pred_str == 'EQ':
                             pred = RuleCondition.EQUALS
@@ -226,7 +230,7 @@ def parse_rule_file(filename):
                         elif pred_str == 'LE' or pred_str == '<=':
                             pred = RuleCondition.LE
                         else:
-                            raise Exception("Unknown Condition predicate '%s'" % (pred_str, ))
+                            raise Exception("Unknown Condition predicate '%s'" % (pred_str,))
 
                         rule_condition = RuleCondition(what, pred, value_str)
                         cur_rule.conditions.append(rule_condition)
@@ -253,7 +257,6 @@ def parse_rule_file(filename):
                             else:
                                 tax = float(tax_str)
 
-                        amount = 0.0
                         if amount_str.endswith('%'):
                             amount = float(amount_str[:-1]) / 100.0
                             is_percent = True
@@ -270,14 +273,15 @@ def parse_rule_file(filename):
             raise Exception("The current rule does not have a name!")
 
         if rules_by_name.has_key(cur_rule.name):
-            raise Exception("A rule named '%s' already exists in our rule list" % (cur_rule.name, ))
+            raise Exception("A rule named '%s' already exists in our rule list" % (cur_rule.name,))
         rules.append(cur_rule)
         rules_by_name[cur_rule.name] = cur_rule
 
     return rules
 
+
 def usage():
-    print """
+    print("""
 Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
 
   -r <rules.txt>   - specify the file to use for determining the list of rules.
@@ -309,8 +313,9 @@ Usage: bank-csv-to-ledger [-r <rules.txt>] [-h] csv-file account-string
  Either the fields Amount are specified, or PaidIn and PaidOut is given.
 
  The default value is 'Date,Desc,Amount'
-"""
+""")
     exit(0)
+
 
 delimiter = ','
 date_format = 'D/M/Y'
@@ -370,14 +375,15 @@ filename = args[0]
 account = args[1]
 
 if not os.path.isfile(rules_file):
-    print "ERROR: the rules file %s doesn't exist" % (rules_file, )
+    print("ERROR: the rules file %s doesn't exist" % (rules_file,))
     usage()
 
 if not os.path.isfile(filename):
-    print "ERROR: the csv file %s doesn't exist" % (filename, )
+    print("ERROR: the csv file %s doesn't exist" % (filename,))
     usage()
 
 transactions = {}
+
 
 class Tran:
     def __init__(self, account, date, desc, amount):
@@ -386,25 +392,26 @@ class Tran:
         self.desc = desc
         self.amount = float(amount)
 
-
     def __str__(self):
-        s = ("%s,%s,%.2f" % (self.date, self.desc, self.amount))
+        s = ("%s,%s,%.2f" % (self.date, self.desc, round(self.amount, 2)))
         return s
 
     def getLedgerString(self):
         s = ("%s\t%s\n" % (self.date, self.desc))
-        s += ("\t%s\t%0.2f\n" % (self.account, self.amount))
+        s += ("\t%s\t%0.2f\n" % (self.account, round(self.amount, 2)))
         return s
 
+
 def monthstr_to_month(ms):
-    monthstrings = [ 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', ]
+    monthstrings = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', ]
 
     ms = ms.lower()
-    for i in xrange(0, len(monthstrings)):
+    for i in range(0, len(monthstrings)):
         if monthstrings[i] == ms:
-            return "%02d" % (i + 1, )
-    raise Exception("Invalid month '%s'" % (ms, ))
-    
+            return "%02d" % (i + 1,)
+    raise Exception("Invalid month '%s'" % (ms,))
+
+
 def format_date(date_format, dt):
     delimiter = '/'
     if date_format.find(' ') > 0:
@@ -413,7 +420,7 @@ def format_date(date_format, dt):
         delimiter = '-'
     parts = date_format.split(delimiter)
     if len(parts) != 3:
-        raise Exception("Invalid date format '%s' parsing date '%s' (delimiter '%s')" % (date_format, dt, delimiter, ))
+        raise Exception("Invalid date format '%s' parsing date '%s' (delimiter '%s')" % (date_format, dt, delimiter,))
     day_offset, month_offset, year_offset = -1, -1, -1
     for i in xrange(0, len(parts)):
         if parts[i].startswith('D'):
@@ -423,11 +430,11 @@ def format_date(date_format, dt):
         elif parts[i].startswith('Y'):
             year_offset = i
         else:
-            raise Exception("Invalid date format '%s'" % (date_format, ))
+            raise Exception("Invalid date format '%s'" % (date_format,))
 
     if day_offset == -1 or month_offset == -1 or year_offset == -1:
-        raise Exception("Invalid date format '%s'" % (date_format, ))
-        
+        raise Exception("Invalid date format '%s'" % (date_format,))
+
     fields = dt.split(delimiter)
     if len(fields) != 3:
         raise Exception("Date '%s' doesn't match date format '%s'" % (dt, date_format))
@@ -444,7 +451,8 @@ def format_date(date_format, dt):
         else:
             yy = '20' + yy
 
-    return "%d-%02d-%02d" % (int(yy), int(mm), int(dd), )
+    return "%d-%02d-%02d" % (int(yy), int(mm), int(dd),)
+
 
 def native_date(dt):
     (yy, mm, dd) = dt.split('-')
@@ -452,27 +460,27 @@ def native_date(dt):
 
 
 file = open(filename, 'r')
-reader = csv.reader(file, dialect = 'excel')
+reader = csv.reader(file, dialect='excel')
 
 for fields in reader:
-    if len(fields) == len(input_format) and ignore_first_line == False:
+    if len(fields) == len(input_format) and not ignore_first_line:
         date = fields[date_offset]
-        desc = fields[desc_offset]
+        desc = fields[desc_offset].strip()
         amount = 0.0
         if amount_offset is None:
-            paid_in = fields[paidin_offset].strip()
-            paid_out = fields[paidout_offset].strip()
+            paid_in = fields[paidin_offset].strip().replace(',', '')
+            paid_out = fields[paidout_offset].strip().replace(',', '')
             if len(paid_in) > 0:
                 amount = float(paid_in)
             if len(paid_out) > 0:
                 amount = -float(paid_out)
         else:
-            amount = float(fields[amount_offset])
+            amount = float(fields[amount_offset].replace(',', ''))
         date = format_date(date_format, date)
         if not transactions.has_key(date):
             transactions[date] = list()
         transactions[date].append(Tran(account, date, desc, amount))
-    if ignore_first_line == True:
+    if ignore_first_line:
         ignore_first_line = False
 
 file.close()
@@ -489,28 +497,28 @@ for dt in dates:
         rule_triggered = False
         for rule in rules:
             if rule.matches(tran.account, tran.date, tran.desc, tran.amount):
-                if print_unmatched_only == False and print_unmatched_as_rules == False and not rule.ignore:
-                    print rule.getLedgerString(tran.account, tran.date, tran.desc, tran.amount)
+                if not print_unmatched_only and not print_unmatched_as_rules and not rule.ignore:
+                    print(rule.getLedgerString(tran.account, tran.date, tran.desc, tran.amount))
                 rule_triggered = True
                 break
 
-        if rule_triggered == False:
+        if not rule_triggered:
             if print_unmatched_only:
-                print tran
+                print(tran)
             elif print_unmatched_as_rules:
                 if not unmatched_rules.has_key(tran.desc):
                     unmatched_rules[tran.desc] = tran
             else:
-                print tran.getLedgerString()
+                print(tran.getLedgerString())
 
 if print_unmatched_as_rules:
     desclist = unmatched_rules.keys()
     desclist.sort()
     for desc in desclist:
         print("Rule:")
-        print("  Name: %s" % (desc,) )
+        print("  Name: %s" % (desc,))
         print("  Conditions:")
-        print("    DESC EQUALS \"%s\"" % (desc,) )
+        print("    DESC EQUALS \"%s\"" % (desc,))
         print("  Allocations:")
         print("    \"UNKNOWN:Unknown\" 100%")
-        print
+        print()
